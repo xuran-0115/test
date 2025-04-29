@@ -1,0 +1,232 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <title>生态平衡模拟工作台</title>
+  <style>
+    :root {
+      --producer-color: #4CAF50;
+      --consumer-color: #FF9800;
+      --decomposer-color: #607D8B;
+      --status-good: #4CAF50;
+      --status-bad: #F44336;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      gap: 20px;
+      max-width: 1000px;
+      margin: 20px auto;
+      padding: 25px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .ecosystem-structure {
+      background: #f8f9fb;
+      padding: 15px;
+      border-radius: 8px;
+    }
+
+    .component-card {
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 6px;
+      cursor: grab;
+      border: 2px solid;
+      background: white;
+    }
+
+    .energy-panel {
+      padding: 20px;
+      background: #f8f9fb;
+      border-radius: 8px;
+    }
+
+    .energy-flow {
+      display: flex;
+      justify-content: space-between;
+      margin: 20px 0;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+    }
+
+    #systemStatus {
+      padding: 15px;
+      border-radius: 8px;
+      transition: all 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <!-- 左侧控制面板 -->
+    <div class="ecosystem-structure">
+      <h3>🌿 生态系统构建</h3>
+      <div class="component-card" style="border-color: var(--producer-color)">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span data-type="producer">生产者</span>
+          <div>
+            <button onclick="adjustCount('producer', -1)" style="padding: 2px 8px; margin-right: 4px">-</button>
+            <span id="producer-count">0</span>
+            <button onclick="adjustCount('producer', 1)" style="padding: 2px 8px; margin-left: 4px">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="component-card" style="border-color: var(--consumer-color)">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span data-type="consumer">消费者</span>
+          <div>
+            <button onclick="adjustCount('consumer', -1)" style="padding: 2px 8px; margin-right: 4px">-</button>
+            <span id="consumer-count">0</span>
+            <button onclick="adjustCount('consumer', 1)" style="padding: 2px 8px; margin-left: 4px">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="component-card" style="border-color: var(--decomposer-color)">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span data-type="decomposer">分解者</span>
+          <div>
+            <button onclick="adjustCount('decomposer', -1)" style="padding: 2px 8px; margin-right: 4px">-</button>
+            <span id="decomposer-count">0</span>
+            <button onclick="adjustCount('decomposer', 1)" style="padding: 2px 8px; margin-left: 4px">+</button>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 20px">
+        <label>☀️ 光照强度：<br>
+          <input type="range" id="light" min="0" max="100" value="60" style="width: 100%">
+        </label>
+      </div>
+      
+      <button onclick="simulate()" 
+              style="margin-top: 15px; width: 100%; padding: 10px; background: var(--status-good); color: white; border: none; border-radius: 6px;">
+        ▶️ 开始模拟
+      </button>
+    </div>
+
+    <!-- 右侧状态面板 -->
+    <div class="energy-panel">
+      <h3>⚖️ 系统状态监测</h3>
+      <div class="energy-flow">
+        <div>
+          <div style="color: var(--producer-color)">🌱 能量生产</div>
+          <div id="energyProduction">0</div>
+        </div>
+        <div>
+          <div style="color: var(--consumer-color)">🔥 能量消耗</div>
+          <div id="energyConsumption">0</div>
+        </div>
+      </div>
+
+      <div id="systemStatus" style="background: #f0f0f0">等待模拟开始...</div>
+    </div>
+  </div>
+
+  <script>
+    let ecosystem = {
+      producers: 0,
+      consumers: 0,
+      decomposers: 0,
+      light: 60
+    };
+
+    // 组件类型的中文名称映射
+    const typeNameMap = {
+      producer: '生产者',
+      consumer: '消费者',
+      decomposer: '分解者'
+    };
+
+    // 拖拽交互逻辑
+    // 初始化拖拽功能
+    function initDragAndDrop() {
+      document.querySelectorAll('.component-card').forEach(card => {
+        card.draggable = true;
+        card.addEventListener('dragstart', e => {
+          const type = card.querySelector('[data-type]').dataset.type;
+          e.dataTransfer.setData('type', type);
+        });
+      });
+
+      document.querySelector('.energy-panel').addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      });
+      document.querySelector('.energy-panel').addEventListener('drop', e => {
+        e.preventDefault();
+        const type = e.dataTransfer.getData('type');
+        if (type && ecosystem.hasOwnProperty(type + 's')) {
+          ecosystem[type + 's']++;
+          updateCounts();
+          updateComponentDisplay();
+          simulate(); // 自动更新系统状态
+        }
+      });
+    }
+
+    // 初始化拖拽
+    initDragAndDrop();
+
+    // 更新参数
+    document.getElementById('light').addEventListener('input', e => {
+      ecosystem.light = e.target.value;
+    });
+
+    function adjustCount(type, delta) {
+      const newCount = Math.max(0, ecosystem[type + 's'] + delta);
+	  //增加判断
+	  if(newCount<=20){
+		ecosystem[type + 's'] = newCount;
+		document.getElementById(`${type}-count`).textContent = newCount;
+		}
+	}
+    function updateCounts() {
+      ['producer', 'consumer', 'decomposer'].forEach(type => {
+        document.getElementById(`${type}-count`).textContent = ecosystem[type + 's'];
+      });
+    }
+    // 更新组件显示
+    function updateComponentDisplay() {
+      document.querySelectorAll('.component-card').forEach(card => {
+        const type = card.dataset.type;
+        if (type && ecosystem.hasOwnProperty(type + 's')) {
+          const count = ecosystem[type + 's'];
+          const countElement = card.querySelector('span[id$="-count"]');
+          if (countElement) {
+            countElement.textContent = count;
+          }
+        }
+      });
+    }
+    function simulate() {
+      const statusElement = document.getElementById('systemStatus');
+      
+      // 结构完整性检查
+      if (ecosystem.producers < 1 || ecosystem.decomposers < 1) {
+        statusElement.innerHTML = '❌ 系统崩溃：生态结构不完整';
+        statusElement.style.background = '#FFEBEE';
+        statusElement.style.color = '#F44336';
+        return;
+      }
+      // 能量收支计算
+      const production = ecosystem.producers * (ecosystem.light / 100) * 0.3;
+      const consumption = ecosystem.consumers * 0.7+ecosystem.decomposers * 0.2;
+      document.getElementById('energyProduction').textContent = production.toFixed(1);
+      document.getElementById('energyConsumption').textContent = consumption.toFixed(1);
+      // 平衡状态判断
+      if (production.toFixed(1)*1 >= consumption.toFixed(1)*1) {
+        statusElement.innerHTML = '✅ 生态平衡状态稳定';
+        statusElement.style.background = '#E8F5E9';
+        statusElement.style.color = '#4CAF50';
+      } else {
+        statusElement.innerHTML = `❌ 系统崩溃：能量赤字（短缺 ${(consumption - production).toFixed(1)} 单位）`;
+        statusElement.style.background = '#FFEBEE';
+        statusElement.style.color = '#F44336';
+      }
+    }
+  </script>
+</body>
+</html>
